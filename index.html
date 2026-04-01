@@ -200,8 +200,8 @@
 const API_KEY = 'ad4163ac839d47328163ac839d1732f8';
 
 const STATIONS = [
-  { id: 'IPOPOV26', name: 'Мандра Харизанов', subtitle: 'с. Попович', info: 'Мандра Харизанов, с. Попович, БГ' },
-  { id: 'IOBZOR2', name: 'Морска Перла', subtitle: 'гр. Обзор', info: 'Морска Перла, гр. Обзор, БГ' }
+  { id: 'IPOPOV26', name: 'Мандра Харизанов', subtitle: 'Попович' },
+  { id: 'IOBZOR2', name: 'Морска Перла', subtitle: 'Обзор' }
 ];
 
 // Swipe navigation
@@ -397,7 +397,6 @@ async function fetchWeather(idx) {
           <div class="sub">W/m&sup2;</div>
         </div>
       </div>
-      <div class="station-info">${st.info}</div>
     `;
   } catch (e) {
     document.getElementById(`current${idx}`).innerHTML = `<div class="error">Грешка: ${e.message}</div>`;
