@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Метеостанция Попович</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#1a1a2e">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .header {
+    text-align: center;
+    padding: 20px 0;
+  }
+  .header h1 { font-size: 1.4em; font-weight: 300; opacity: 0.9; }
+  .header .time { font-size: 0.85em; opacity: 0.6; margin-top: 5px; }
+  .temp-main {
+    text-align: center;
+    padding: 30px 0;
+  }
+  .temp-main .value {
+    font-size: 5em;
+    font-weight: 200;
+    line-height: 1;
+  }
+  .temp-main .unit { font-size: 0.4em; opacity: 0.6; vertical-align: super; }
+  .temp-main .feels {
+    font-size: 0.9em;
+    opacity: 0.6;
+    margin-top: 5px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  .card {
+    background: rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .card .label {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.5;
+    margin-bottom: 8px;
+  }
+  .card .val {
+    font-size: 1.6em;
+    font-weight: 300;
+  }
+  .card .sub {
+    font-size: 0.8em;
+    opacity: 0.5;
+    margin-top: 4px;
+  }
+  .status {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 0.75em;
+    opacity: 0.4;
+  }
+  .error {
+    text-align: center;
+    padding: 40px;
+    color: #ff6b6b;
+  }
+  .loading {
+    text-align: center;
+    padding: 60px;
+    opacity: 0.5;
+    font-size: 1.2em;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="loading">Зареждане...</div>
+</div>
+
+<script>
+const API_KEY = 'ad4163ac839d47328163ac839d1732f8';
+const STATION_ID = 'IPOPOV26';
+const URL = `https://api.weather.com/v2/pws/observations/current?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
+
+function windDirection(deg) {
+  const dirs = ['С','ССИ','СИ','ИСИ','И','ИЮИ','ЮИ','ЮЮИ','Ю','ЮЮЗ','ЮЗ','ЗЮЗ','З','ЗСЗ','СЗ','ССЗ'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+
+async function fetchWeather() {
+  try {
+    const res = await fetch(URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const obs = data.observations[0];
+    const m = obs.metric;
+    const time = new Date(obs.obsTimeUtc);
+    const timeStr = time.toLocaleString('bg-BG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+
+    document.getElementById('app').innerHTML = `
+      <div class="header">
+        <h1>Попович</h1>
+        <div class="time">${timeStr}</div>
+      </div>
+      <div class="temp-main">
+        <div class="value">${m.temp.toFixed(1)}<span class="unit">&deg;C</span></div>
+        <div class="feels">Усеща се ${m.heatIndex !== m.temp ? m.heatIndex.toFixed(1) : m.windChill.toFixed(1)}&deg;C</div>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="label">Влажност</div>
+          <div class="val">${obs.humidity.toFixed(0)}%</div>
+          <div class="sub">Роса ${m.dewpt.toFixed(1)}&deg;C</div>
+        </div>
+        <div class="card">
+          <div class="label">Вятър</div>
+          <div class="val">${m.windSpeed.toFixed(1)} <small>km/h</small></div>
+          <div class="sub">${windDirection(obs.winddir)} | Порив ${m.windGust.toFixed(1)}</div>
+        </div>
+        <div class="card">
+          <div class="label">Налягане</div>
+          <div class="val">${m.pressure.toFixed(1)}</div>
+          <div class="sub">hPa</div>
+        </div>
+        <div class="card">
+          <div class="label">Валеж</div>
+          <div class="val">${m.precipTotal.toFixed(1)} <small>mm</small></div>
+          <div class="sub">Интензивност ${m.precipRate.toFixed(1)}</div>
+        </div>
+        <div class="card">
+          <div class="label">UV индекс</div>
+          <div class="val">${obs.uv.toFixed(0)}</div>
+        </div>
+        <div class="card">
+          <div class="label">Слънце</div>
+          <div class="val">${obs.solarRadiation !== null ? obs.solarRadiation.toFixed(0) : '—'}</div>
+          <div class="sub">W/m&sup2;</div>
+        </div>
+      </div>
+      <div class="status">Обновяване на всеки 60 сек</div>
+    `;
+  } catch (e) {
+    document.getElementById('app').innerHTML = `<div class="error">Грешка: ${e.message}</div>`;
+  }
+}
+
+fetchWeather();
+setInterval(fetchWeather, 60000);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+</script>
+</body>
+</html>
