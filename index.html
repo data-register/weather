@@ -6,8 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Метеостанция Попович</title>
-<link rel="manifest" href="/manifest.json">
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
 <meta name="theme-color" content="#1a1a2e">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -165,7 +165,7 @@ fetchWeather();
 setInterval(fetchWeather, 60000);
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
+  navigator.serviceWorker.register('sw.js');
 }
 </script>
 </body>
