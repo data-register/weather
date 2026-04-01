@@ -111,8 +111,17 @@ const STATION_ID = 'IPOPOV26';
 const URL = `https://api.weather.com/v2/pws/observations/current?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
 
 function windDirection(deg) {
-  const dirs = ['С','ССИ','СИ','ИСИ','И','ИЮИ','ЮИ','ЮЮИ','Ю','ЮЮЗ','ЮЗ','ЗЮЗ','З','ЗСЗ','СЗ','ССЗ'];
+  const dirs = [
+    'Север','Север-североизток','Североизток','Изток-североизток',
+    'Изток','Изток-югоизток','Югоизток','Юг-югоизток',
+    'Юг','Юг-югозапад','Югозапад','Запад-югозапад',
+    'Запад','Запад-северозапад','Северозапад','Север-северозапад'
+  ];
   return dirs[Math.round(deg / 22.5) % 16];
+}
+
+function kmhToMs(kmh) {
+  return (kmh / 3.6).toFixed(1);
 }
 
 async function fetchWeather() {
@@ -137,14 +146,6 @@ async function fetchWeather() {
       </div>
       <div class="grid">
         <div class="card">
-          <div class="label">Топлинен индекс</div>
-          <div class="val">${m.heatIndex.toFixed(1)}&deg;C</div>
-        </div>
-        <div class="card">
-          <div class="label">Охлаждане от вятър</div>
-          <div class="val">${m.windChill.toFixed(1)}&deg;C</div>
-        </div>
-        <div class="card">
           <div class="label">Влажност</div>
           <div class="val">${obs.humidity.toFixed(0)}%</div>
         </div>
@@ -154,12 +155,12 @@ async function fetchWeather() {
         </div>
         <div class="card">
           <div class="label">Вятър</div>
-          <div class="val">${m.windSpeed.toFixed(1)} <small>km/h</small></div>
+          <div class="val">${kmhToMs(m.windSpeed)} <small>m/s</small></div>
           <div class="sub">${windDirection(obs.winddir)} (${obs.winddir}&deg;)</div>
         </div>
         <div class="card">
           <div class="label">Порив</div>
-          <div class="val">${m.windGust.toFixed(1)} <small>km/h</small></div>
+          <div class="val">${kmhToMs(m.windGust)} <small>m/s</small></div>
         </div>
         <div class="card">
           <div class="label">Налягане</div>
@@ -182,10 +183,6 @@ async function fetchWeather() {
           <div class="label">Слънчева радиация</div>
           <div class="val">${obs.solarRadiation !== null ? obs.solarRadiation.toFixed(1) : '—'}</div>
           <div class="sub">W/m&sup2;</div>
-        </div>
-        <div class="card">
-          <div class="label">Надморска височина</div>
-          <div class="val">${m.elev.toFixed(1)} <small>м</small></div>
         </div>
       </div>
       <div class="station-info">
