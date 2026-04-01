@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Метеостанция Попович</title>
+<title>Мандра Харизанов</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png" type="image/png">
 <meta name="theme-color" content="#1a1a2e">
@@ -13,15 +13,32 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-    color: #fff;
     min-height: 100vh;
     padding: 20px;
+    transition: background 0.3s, color 0.3s;
+  }
+  body.dark {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff;
+  }
+  body.light {
+    background: linear-gradient(135deg, #e8f0fe 0%, #d4e4f7 50%, #c0d8f0 100%);
+    color: #1a1a2e;
+  }
+  .theme-toggle {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    opacity: 0.6;
+    line-height: 1;
   }
   .header { text-align: center; padding: 20px 0; }
   .header h1 { font-size: 1.4em; font-weight: 300; opacity: 0.9; }
   .header .time { font-size: 0.85em; opacity: 0.6; margin-top: 5px; }
-  .header .coords { font-size: 0.75em; opacity: 0.4; margin-top: 3px; }
   .temp-main { text-align: center; padding: 30px 0; }
   .temp-main .value { font-size: 5em; font-weight: 200; line-height: 1; }
   .temp-main .unit { font-size: 0.4em; opacity: 0.6; vertical-align: super; }
@@ -40,12 +57,18 @@
     max-width: 500px;
     margin: 0 auto;
   }
-  .card {
+  .dark .card {
     background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .light .card {
+    background: rgba(0,0,0,0.05);
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+  .card {
     border-radius: 16px;
     padding: 16px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.05);
   }
   .card .label {
     font-size: 0.75em;
@@ -83,15 +106,18 @@
     padding: 6px;
     font-size: 0.9em;
     font-weight: 300;
-    border-top: 1px solid rgba(255,255,255,0.05);
   }
+  .dark td { border-top: 1px solid rgba(255,255,255,0.05); }
+  .light td { border-top: 1px solid rgba(0,0,0,0.08); }
   .station-info { text-align: center; margin-top: 16px; font-size: 0.75em; opacity: 0.35; }
   .status { text-align: center; margin-top: 8px; font-size: 0.75em; opacity: 0.4; }
   .error { text-align: center; padding: 40px; color: #ff6b6b; }
   .loading { text-align: center; padding: 60px; opacity: 0.5; font-size: 1.2em; }
 </style>
 </head>
-<body>
+<body class="dark">
+
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="Смяна на тема">&#9789;</button>
 
 <div id="app">
   <div class="loading">Зареждане...</div>
@@ -100,6 +126,27 @@
 <script>
 const API_KEY = 'ad4163ac839d47328163ac839d1732f8';
 const STATION_ID = 'IPOPOV26';
+
+function toggleTheme() {
+  const body = document.body;
+  const btn = document.querySelector('.theme-toggle');
+  if (body.classList.contains('dark')) {
+    body.classList.replace('dark', 'light');
+    btn.innerHTML = '&#9728;';
+    localStorage.setItem('theme', 'light');
+  } else {
+    body.classList.replace('light', 'dark');
+    btn.innerHTML = '&#9789;';
+    localStorage.setItem('theme', 'dark');
+  }
+}
+
+// Restore saved theme
+const saved = localStorage.getItem('theme');
+if (saved === 'light') {
+  document.body.classList.replace('dark', 'light');
+  document.querySelector('.theme-toggle').innerHTML = '&#9728;';
+}
 
 function windDirection(deg) {
   const dirs = [
@@ -122,17 +169,19 @@ function yyyymmdd(d) {
 }
 
 function fmtDate(s) {
-  return new Date(s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8))
-    .toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
+  const d = new Date(s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8));
+  return pad(d.getDate()) + '.' + pad(d.getMonth() + 1);
 }
 
-// Fetch year history in chunks of 31 days (max allowed by API), all in parallel
+function fmtDateTime(d) {
+  return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear() + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
 async function fetchYearHistory() {
   const now = new Date();
   const jan1 = new Date(now.getFullYear(), 0, 1);
   const today = now;
 
-  // Split year into 31-day chunks
   const chunks = [];
   const d = new Date(jan1);
   while (d < today) {
@@ -144,7 +193,6 @@ async function fetchYearHistory() {
     d.setDate(d.getDate() + 1);
   }
 
-  // Fetch all chunks in parallel
   const results = await Promise.all(chunks.map(async ({ start, end }) => {
     const url = `https://api.weather.com/v2/pws/history/daily?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m&startDate=${start}&endDate=${end}`;
     try {
@@ -155,7 +203,6 @@ async function fetchYearHistory() {
     } catch (e) { return []; }
   }));
 
-  // Flatten and map
   return results.flat().map(o => ({
     date: o.obsTimeLocal.slice(0, 10).replace(/-/g, ''),
     tempHigh: o.metric.tempHigh,
@@ -221,16 +268,15 @@ async function fetchWeather() {
     const obs = data.observations[0];
     const m = obs.metric;
     const time = new Date(obs.obsTimeUtc);
-    const timeStr = time.toLocaleString('bg-BG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+    const timeStr = fmtDateTime(time);
 
     const historyEl = document.getElementById('history');
     const historyHtml = historyEl ? historyEl.innerHTML : '';
 
     document.getElementById('app').innerHTML = `
       <div class="header">
-        <h1>Попович</h1>
+        <h1>Мандра Харизанов, Попович</h1>
         <div class="time">${timeStr}</div>
-        <div class="coords">${obs.lat.toFixed(4)}°N, ${obs.lon.toFixed(4)}°E</div>
       </div>
       <div class="temp-main">
         <div class="value">${m.temp.toFixed(1)}<span class="unit">&deg;C</span></div>
@@ -277,7 +323,7 @@ async function fetchWeather() {
       </div>
       <div id="history">${historyHtml}</div>
       <div class="station-info">
-        Станция: ${obs.stationID} | ${obs.neighborhood}, ${obs.country}
+        Мандра Харизанов, с. Попович, БГ
       </div>
       <div class="status">Обновяване на всеки 60 сек</div>
     `;
