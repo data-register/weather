@@ -225,21 +225,21 @@
 
 <div class="slides" id="slides">
   <div class="slide" id="slide0">
+    <div id="forecast"><div class="loading">Зареждане на прогноза...</div></div>
+  </div>
+  <div class="slide" id="slide1">
     <div id="current0"><div class="loading">Зареждане...</div></div>
     <div id="history0"><div class="status">Зареждане на история...</div></div>
   </div>
-  <div class="slide" id="slide1">
+  <div class="slide" id="slide2">
     <div id="current1"><div class="loading">Зареждане...</div></div>
     <div id="history1"><div class="status">Зареждане на история...</div></div>
-  </div>
-  <div class="slide" id="slide2">
-    <div id="forecast"><div class="loading">Зареждане на прогноза...</div></div>
   </div>
 </div>
 
 <div class="dots">
-  <div class="dot active" id="dot0"></div>
-  <div class="dot" id="dot1"></div>
+  <div class="dot" id="dot0"></div>
+  <div class="dot active" id="dot1"></div>
   <div class="dot" id="dot2"></div>
 </div>
 
@@ -683,7 +683,8 @@ async function refreshAll() {
   fetchForecast();
 }
 
-// Initial load
+// Initial load — start on middle slide (Попович)
+slidesEl.scrollLeft = window.innerWidth;
 refreshAll();
 setInterval(() => {
   STATIONS.forEach(async (_, i) => {
