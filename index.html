@@ -356,7 +356,7 @@ async function fetchWeather(idx) {
       <div class="temp-main">
         <div class="value">${m.temp.toFixed(1)}<span class="unit">&deg;C</span></div>
         <div class="feels">Усеща се ${m.heatIndex !== m.temp ? m.heatIndex.toFixed(1) : m.windChill.toFixed(1)}&deg;C</div>
-        ${summary ? `<div class="minmax">&#9661; ${summary.metric.tempLow.toFixed(1)}&deg; &nbsp; &#9651; ${summary.metric.tempHigh.toFixed(1)}&deg;</div>` : ''}
+        ${summary ? `<div class="minmax">&#9661; ${Math.min(summary.metric.tempLow, m.temp).toFixed(1)}&deg; &nbsp; &#9651; ${Math.max(summary.metric.tempHigh, m.temp).toFixed(1)}&deg;</div>` : ''}
       </div>
       <div class="section">Текущи данни</div>
       <div class="grid">
