@@ -16,6 +16,7 @@
     min-height: 100vh;
     padding: 20px;
     transition: background 0.3s, color 0.3s;
+    overscroll-behavior-y: contain;
   }
   body.dark {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -44,10 +45,13 @@
   .header { text-align: center; padding: 20px 0; }
   .header h1 { font-size: 1.4em; font-weight: 300; opacity: 0.9; }
   .header .time { font-size: 0.85em; opacity: 0.6; margin-top: 5px; }
+  .header .ago { font-size: 0.75em; opacity: 0.4; margin-top: 3px; }
+  .header .ago.stale { color: #ff6b6b; opacity: 1; }
   .temp-main { text-align: center; padding: 30px 0; }
   .temp-main .value { font-size: 5em; font-weight: 200; line-height: 1; }
   .temp-main .unit { font-size: 0.4em; opacity: 0.6; vertical-align: super; }
   .temp-main .feels { font-size: 0.9em; opacity: 0.6; margin-top: 5px; }
+  .temp-main .minmax { font-size: 0.85em; opacity: 0.5; margin-top: 3px; }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -114,15 +118,32 @@
   }
   .dark td { border-top: 1px solid rgba(255,255,255,0.05); }
   .light td { border-top: 1px solid rgba(0,0,0,0.08); }
+  .chart-container {
+    max-width: 500px;
+    margin: 12px auto;
+    height: 120px;
+    position: relative;
+  }
+  .chart-container canvas { width: 100%; height: 100%; }
   .station-info { text-align: center; margin-top: 16px; font-size: 0.75em; opacity: 0.35; }
   .status { text-align: center; margin-top: 8px; font-size: 0.75em; opacity: 0.4; }
   .error { text-align: center; padding: 40px; color: #ff6b6b; }
   .loading { text-align: center; padding: 60px; opacity: 0.5; font-size: 1.2em; }
+  .pull-indicator {
+    text-align: center;
+    font-size: 0.8em;
+    opacity: 0;
+    transition: opacity 0.2s;
+    height: 0;
+    overflow: visible;
+  }
+  .pull-indicator.visible { opacity: 0.5; }
 </style>
 </head>
 <body class="dark">
 
 <button class="theme-toggle" onclick="toggleTheme()" aria-label="Смяна на тема">&#9789;</button>
+<div class="pull-indicator" id="pullIndicator">&#8595; Дръпни за обновяване</div>
 
 <div id="current">
   <div class="loading">Зареждане...</div>
@@ -136,6 +157,7 @@
 const API_KEY = 'ad4163ac839d47328163ac839d1732f8';
 const STATION_ID = 'IPOPOV26';
 
+// Theme
 function toggleTheme() {
   const body = document.body;
   const btn = document.querySelector('.theme-toggle');
@@ -149,14 +171,32 @@ function toggleTheme() {
     localStorage.setItem('theme', 'dark');
   }
 }
-
-// Restore saved theme
-const saved = localStorage.getItem('theme');
-if (saved === 'light') {
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'light') {
   document.body.classList.replace('dark', 'light');
   document.querySelector('.theme-toggle').innerHTML = '&#9728;';
 }
 
+// Pull to refresh
+let pullStart = 0;
+document.addEventListener('touchstart', e => {
+  if (window.scrollY === 0) pullStart = e.touches[0].clientY;
+});
+document.addEventListener('touchmove', e => {
+  if (pullStart && e.touches[0].clientY - pullStart > 60) {
+    document.getElementById('pullIndicator').classList.add('visible');
+  }
+});
+document.addEventListener('touchend', e => {
+  const indicator = document.getElementById('pullIndicator');
+  if (indicator.classList.contains('visible')) {
+    indicator.classList.remove('visible');
+    refreshAll();
+  }
+  pullStart = 0;
+});
+
+// Helpers
 function windDirection(deg) {
   const dirs = [
     'Север','Север-североизток','Североизток','Изток-североизток',
@@ -166,26 +206,122 @@ function windDirection(deg) {
   ];
   return dirs[Math.round(deg / 22.5) % 16];
 }
-
-function kmhToMs(kmh) {
-  return (kmh / 3.6).toFixed(1);
-}
-
+function kmhToMs(kmh) { return (kmh / 3.6).toFixed(1); }
 function pad(n) { return String(n).padStart(2, '0'); }
-
-function yyyymmdd(d) {
-  return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
-}
-
+function yyyymmdd(d) { return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); }
 function fmtDate(s) {
-  const d = new Date(s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8));
-  return pad(d.getDate()) + '.' + pad(d.getMonth() + 1);
+  return s.slice(6,8) + '.' + s.slice(4,6);
 }
-
 function fmtDateTime(d) {
   return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear() + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
+function timeAgo(date) {
+  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (mins < 1) return 'току-що';
+  if (mins < 60) return `преди ${mins} мин`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `преди ${hours} ч`;
+  return `преди ${Math.floor(hours / 24)} дни`;
+}
+function pressureArrow(trend) {
+  if (trend > 0.5) return ' &#8593;';
+  if (trend < -0.5) return ' &#8595;';
+  return ' &#8594;';
+}
 
+// Today's min/max and pressure trend from daily summary
+let todaySummary = null;
+async function fetchTodaySummary() {
+  try {
+    const url = `https://api.weather.com/v2/pws/dailysummary/7day?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    const today = new Date().toISOString().slice(0, 10);
+    todaySummary = data.summaries.find(s => s.obsTimeLocal.startsWith(today)) || data.summaries[data.summaries.length - 1];
+  } catch (e) {}
+}
+
+// Current weather
+async function fetchWeather() {
+  try {
+    const url = `https://api.weather.com/v2/pws/observations/current?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const obs = data.observations[0];
+    const m = obs.metric;
+    const time = new Date(obs.obsTimeUtc);
+    const timeStr = fmtDateTime(time);
+    const ago = timeAgo(time);
+    const stale = (Date.now() - time.getTime()) > 30 * 60000;
+
+    const minmax = todaySummary
+      ? `${todaySummary.metric.tempLow.toFixed(1)}° / ${todaySummary.metric.tempHigh.toFixed(1)}°`
+      : '';
+    const pTrend = todaySummary ? pressureArrow(todaySummary.metric.pressureTrend) : '';
+
+    document.getElementById('current').innerHTML = `
+      <div class="header">
+        <h1>Мандра Харизанов<br><small style="font-size:0.7em;opacity:0.6">с. Попович</small></h1>
+        <div class="time">${timeStr}</div>
+        <div class="ago ${stale ? 'stale' : ''}">${ago}${stale ? ' &#9888; Станцията не предава!' : ''}</div>
+      </div>
+      <div class="temp-main">
+        <div class="value">${m.temp.toFixed(1)}<span class="unit">&deg;C</span></div>
+        <div class="feels">Усеща се ${m.heatIndex !== m.temp ? m.heatIndex.toFixed(1) : m.windChill.toFixed(1)}&deg;C</div>
+        ${minmax ? `<div class="minmax">&#9661; ${todaySummary.metric.tempLow.toFixed(1)}&deg; &nbsp; &#9651; ${todaySummary.metric.tempHigh.toFixed(1)}&deg;</div>` : ''}
+      </div>
+      <div class="section">Текущи данни</div>
+      <div class="grid">
+        <div class="card">
+          <div class="label">Влажност</div>
+          <div class="val">${obs.humidity.toFixed(0)}%</div>
+        </div>
+        <div class="card">
+          <div class="label">Точка на оросяване</div>
+          <div class="val">${m.dewpt.toFixed(1)}&deg;C</div>
+        </div>
+        <div class="card">
+          <div class="label">Вятър</div>
+          <div class="val">${kmhToMs(m.windSpeed)} <small>m/s</small></div>
+          <div class="sub">${windDirection(obs.winddir)} (${obs.winddir}&deg;)</div>
+        </div>
+        <div class="card">
+          <div class="label">Порив</div>
+          <div class="val">${kmhToMs(m.windGust)} <small>m/s</small></div>
+        </div>
+        <div class="card">
+          <div class="label">Налягане</div>
+          <div class="val">${m.pressure.toFixed(1)}${pTrend}</div>
+          <div class="sub">hPa</div>
+        </div>
+        <div class="card">
+          <div class="label">Валеж днес</div>
+          <div class="val">${m.precipTotal.toFixed(1)} <small>mm</small></div>
+          <div class="sub">${m.precipRate.toFixed(1)} mm/h сега</div>
+        </div>
+        <div class="card">
+          <div class="label">UV индекс</div>
+          <div class="val">${obs.uv.toFixed(1)}</div>
+        </div>
+        <div class="card">
+          <div class="label">Слънчева радиация</div>
+          <div class="val">${obs.solarRadiation !== null ? obs.solarRadiation.toFixed(1) : '—'}</div>
+          <div class="sub">W/m&sup2;</div>
+        </div>
+      </div>
+    `;
+    document.getElementById('footer').innerHTML = `
+      <div class="station-info">Мандра Харизанов, с. Попович, БГ</div>
+      <div class="status">Обновяване на всеки 60 сек</div>
+    `;
+  } catch (e) {
+    document.getElementById('current').innerHTML = `<div class="error">Грешка: ${e.message}</div>`;
+  }
+}
+
+// History
 async function fetchYearHistory() {
   const now = new Date();
   const jan1 = new Date(now.getFullYear(), 0, 1);
@@ -218,6 +354,76 @@ async function fetchYearHistory() {
     tempLow: o.metric.tempLow,
     precipTotal: o.metric.precipTotal
   }));
+}
+
+function drawChart(canvasId, days) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || days.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+  const pad_l = 35, pad_r = 10, pad_t = 10, pad_b = 25;
+  const cw = w - pad_l - pad_r, ch = h - pad_t - pad_b;
+
+  const allTemps = days.flatMap(d => [d.tempLow, d.tempHigh]);
+  const tMin = Math.floor(Math.min(...allTemps)) - 1;
+  const tMax = Math.ceil(Math.max(...allTemps)) + 1;
+  const tRange = tMax - tMin || 1;
+
+  const isDark = document.body.classList.contains('dark');
+  const textColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+  // Grid lines
+  ctx.strokeStyle = gridColor;
+  ctx.lineWidth = 1;
+  for (let t = Math.ceil(tMin); t <= Math.floor(tMax); t += Math.ceil(tRange / 4)) {
+    const y = pad_t + ch - ((t - tMin) / tRange) * ch;
+    ctx.beginPath(); ctx.moveTo(pad_l, y); ctx.lineTo(w - pad_r, y); ctx.stroke();
+    ctx.fillStyle = textColor; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(t + '°', pad_l - 5, y + 4);
+  }
+
+  // Date labels
+  ctx.fillStyle = textColor; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  days.forEach((d, i) => {
+    const x = pad_l + (i / (days.length - 1)) * cw;
+    ctx.fillText(fmtDate(d.date), x, h - 5);
+  });
+
+  // High line
+  ctx.strokeStyle = '#ff6b6b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  days.forEach((d, i) => {
+    const x = pad_l + (i / (days.length - 1)) * cw;
+    const y = pad_t + ch - ((d.tempHigh - tMin) / tRange) * ch;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Low line
+  ctx.strokeStyle = '#4dabf7';
+  ctx.beginPath();
+  days.forEach((d, i) => {
+    const x = pad_l + (i / (days.length - 1)) * cw;
+    const y = pad_t + ch - ((d.tempLow - tMin) / tRange) * ch;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Dots
+  days.forEach((d, i) => {
+    const x = pad_l + (i / (days.length - 1)) * cw;
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath(); ctx.arc(x, pad_t + ch - ((d.tempHigh - tMin) / tRange) * ch, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4dabf7';
+    ctx.beginPath(); ctx.arc(x, pad_t + ch - ((d.tempLow - tMin) / tRange) * ch, 3, 0, Math.PI * 2); ctx.fill();
+  });
 }
 
 function renderHistory(days) {
@@ -261,6 +467,10 @@ function renderHistory(days) {
         <div class="sub">mm</div>
       </div>
     </div>
+    <div class="section">Температура — 7 дни</div>
+    <div class="chart-container">
+      <canvas id="tempChart" style="width:100%;height:100%"></canvas>
+    </div>
     <div class="section">Последни 7 дни</div>
     <table>
       <tr><th>Дата</th><th>Мин</th><th>Макс</th><th>Валеж</th></tr>
@@ -268,84 +478,29 @@ function renderHistory(days) {
     </table>`;
 }
 
-async function fetchWeather() {
-  try {
-    const url = `https://api.weather.com/v2/pws/observations/current?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const obs = data.observations[0];
-    const m = obs.metric;
-    const time = new Date(obs.obsTimeUtc);
-    const timeStr = fmtDateTime(time);
-
-    document.getElementById('current').innerHTML = `
-      <div class="header">
-        <h1>Мандра Харизанов<br><small style="font-size:0.7em;opacity:0.6">с. Попович</small></h1>
-        <div class="time">${timeStr}</div>
-      </div>
-      <div class="temp-main">
-        <div class="value">${m.temp.toFixed(1)}<span class="unit">&deg;C</span></div>
-        <div class="feels">Усеща се ${m.heatIndex !== m.temp ? m.heatIndex.toFixed(1) : m.windChill.toFixed(1)}&deg;C</div>
-      </div>
-      <div class="section">Текущи данни</div>
-      <div class="grid">
-        <div class="card">
-          <div class="label">Влажност</div>
-          <div class="val">${obs.humidity.toFixed(0)}%</div>
-        </div>
-        <div class="card">
-          <div class="label">Точка на оросяване</div>
-          <div class="val">${m.dewpt.toFixed(1)}&deg;C</div>
-        </div>
-        <div class="card">
-          <div class="label">Вятър</div>
-          <div class="val">${kmhToMs(m.windSpeed)} <small>m/s</small></div>
-          <div class="sub">${windDirection(obs.winddir)} (${obs.winddir}&deg;)</div>
-        </div>
-        <div class="card">
-          <div class="label">Порив</div>
-          <div class="val">${kmhToMs(m.windGust)} <small>m/s</small></div>
-        </div>
-        <div class="card">
-          <div class="label">Налягане</div>
-          <div class="val">${m.pressure.toFixed(1)}</div>
-          <div class="sub">hPa</div>
-        </div>
-        <div class="card">
-          <div class="label">Валеж днес</div>
-          <div class="val">${m.precipTotal.toFixed(1)} <small>mm</small></div>
-          <div class="sub">${m.precipRate.toFixed(1)} mm/h сега</div>
-        </div>
-        <div class="card">
-          <div class="label">UV индекс</div>
-          <div class="val">${obs.uv.toFixed(1)}</div>
-        </div>
-        <div class="card">
-          <div class="label">Слънчева радиация</div>
-          <div class="val">${obs.solarRadiation !== null ? obs.solarRadiation.toFixed(1) : '—'}</div>
-          <div class="sub">W/m&sup2;</div>
-        </div>
-      </div>
-    `;
-    document.getElementById('footer').innerHTML = `
-      <div class="station-info">Мандра Харизанов, с. Попович, БГ</div>
-      <div class="status">Обновяване на всеки 60 сек</div>
-    `;
-  } catch (e) {
-    document.getElementById('current').innerHTML = `<div class="error">Грешка: ${e.message}</div>`;
-  }
-}
-
 async function loadHistory() {
   const days = await fetchYearHistory();
   const el = document.getElementById('history');
-  if (el) el.innerHTML = renderHistory(days);
+  if (el) {
+    el.innerHTML = renderHistory(days);
+    const last7 = days.slice(-7);
+    if (last7.length >= 2) drawChart('tempChart', last7);
+  }
 }
 
-fetchWeather();
+async function refreshAll() {
+  await fetchTodaySummary();
+  fetchWeather();
+  loadHistory();
+}
+
+// Initial load
+fetchTodaySummary().then(() => fetchWeather());
 loadHistory();
-setInterval(fetchWeather, 60000);
+setInterval(async () => {
+  await fetchTodaySummary();
+  fetchWeather();
+}, 60000);
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
