@@ -18,35 +18,24 @@
     min-height: 100vh;
     padding: 20px;
   }
-  .header {
-    text-align: center;
-    padding: 20px 0;
-  }
+  .header { text-align: center; padding: 20px 0; }
   .header h1 { font-size: 1.4em; font-weight: 300; opacity: 0.9; }
   .header .time { font-size: 0.85em; opacity: 0.6; margin-top: 5px; }
-  .header .coords {
-    font-size: 0.75em;
-    opacity: 0.4;
-    margin-top: 3px;
-  }
-  .temp-main {
-    text-align: center;
-    padding: 30px 0;
-  }
-  .temp-main .value {
-    font-size: 5em;
-    font-weight: 200;
-    line-height: 1;
-  }
+  .header .coords { font-size: 0.75em; opacity: 0.4; margin-top: 3px; }
+  .temp-main { text-align: center; padding: 30px 0; }
+  .temp-main .value { font-size: 5em; font-weight: 200; line-height: 1; }
   .temp-main .unit { font-size: 0.4em; opacity: 0.6; vertical-align: super; }
-  .temp-main .feels {
-    font-size: 0.9em;
-    opacity: 0.6;
-    margin-top: 5px;
-  }
+  .temp-main .feels { font-size: 0.9em; opacity: 0.6; margin-top: 5px; }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 12px;
     max-width: 500px;
     margin: 0 auto;
@@ -65,16 +54,9 @@
     opacity: 0.5;
     margin-bottom: 8px;
   }
-  .card .val {
-    font-size: 1.6em;
-    font-weight: 300;
-  }
-  .card .sub {
-    font-size: 0.8em;
-    opacity: 0.5;
-    margin-top: 4px;
-  }
-  .section-title {
+  .card .val { font-size: 1.6em; font-weight: 300; }
+  .card .sub { font-size: 0.8em; opacity: 0.5; margin-top: 4px; }
+  .section {
     max-width: 500px;
     margin: 24px auto 12px;
     font-size: 0.85em;
@@ -82,20 +64,13 @@
     letter-spacing: 2px;
     opacity: 0.4;
   }
-  .history-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 12px;
-    max-width: 500px;
-    margin: 0 auto;
-  }
-  .history-table {
+  table {
     max-width: 500px;
     margin: 0 auto;
     width: 100%;
     border-collapse: collapse;
   }
-  .history-table th {
+  th {
     font-size: 0.7em;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -104,35 +79,16 @@
     padding: 8px 6px;
     font-weight: 400;
   }
-  .history-table td {
+  td {
     padding: 6px;
     font-size: 0.9em;
     font-weight: 300;
     border-top: 1px solid rgba(255,255,255,0.05);
   }
-  .station-info {
-    text-align: center;
-    margin-top: 16px;
-    font-size: 0.75em;
-    opacity: 0.35;
-  }
-  .status {
-    text-align: center;
-    margin-top: 8px;
-    font-size: 0.75em;
-    opacity: 0.4;
-  }
-  .error {
-    text-align: center;
-    padding: 40px;
-    color: #ff6b6b;
-  }
-  .loading {
-    text-align: center;
-    padding: 60px;
-    opacity: 0.5;
-    font-size: 1.2em;
-  }
+  .station-info { text-align: center; margin-top: 16px; font-size: 0.75em; opacity: 0.35; }
+  .status { text-align: center; margin-top: 8px; font-size: 0.75em; opacity: 0.4; }
+  .error { text-align: center; padding: 40px; color: #ff6b6b; }
+  .loading { text-align: center; padding: 60px; opacity: 0.5; font-size: 1.2em; }
 </style>
 </head>
 <body>
@@ -144,7 +100,6 @@
 <script>
 const API_KEY = 'ad4163ac839d47328163ac839d1732f8';
 const STATION_ID = 'IPOPOV26';
-const CURRENT_URL = `https://api.weather.com/v2/pws/observations/current?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
 
 function windDirection(deg) {
   const dirs = [
@@ -160,86 +115,59 @@ function kmhToMs(kmh) {
   return (kmh / 3.6).toFixed(1);
 }
 
-function dateStr(d) {
-  return d.toISOString().slice(0, 10).replace(/-/g, '');
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function yyyymmdd(d) {
+  return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
 }
 
-function formatDate(yyyymmdd) {
-  const d = new Date(yyyymmdd.slice(0,4) + '-' + yyyymmdd.slice(4,6) + '-' + yyyymmdd.slice(6,8));
-  return d.toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
+function fmtDate(s) {
+  return new Date(s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8))
+    .toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
 }
 
-// Fetch daily history for a specific date, with localStorage cache
-async function fetchDay(yyyymmdd) {
-  const key = `wx_${yyyymmdd}`;
-  const cached = localStorage.getItem(key);
-  if (cached) return JSON.parse(cached);
-
-  const url = `https://api.weather.com/v2/pws/history/daily?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m&date=${yyyymmdd}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.observations && data.observations.length > 0) {
-      const obs = data.observations[0];
-      const summary = {
-        date: yyyymmdd,
-        tempHigh: obs.metric.tempHigh,
-        tempLow: obs.metric.tempLow,
-        tempAvg: obs.metric.tempAvg,
-        precipTotal: obs.metric.precipTotal,
-        humidityAvg: obs.humidityAvg,
-        windspeedAvg: obs.metric.windspeedAvg
-      };
-      // Cache past days (not today — today's data is incomplete)
-      const today = dateStr(new Date());
-      if (yyyymmdd !== today) {
-        localStorage.setItem(key, JSON.stringify(summary));
-      }
-      return summary;
-    }
-  } catch (e) {}
-  return null;
-}
-
-// Fetch history with rate-limit-friendly sequential loading
-async function fetchHistory() {
+// Fetch year history in chunks of 31 days (max allowed by API), all in parallel
+async function fetchYearHistory() {
   const now = new Date();
-  const today = dateStr(now);
-  const jan1 = now.getFullYear() + '0101';
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  const today = now;
 
-  // Build list of dates from Jan 1 to yesterday
-  const dates = [];
-  const d = new Date(now.getFullYear(), 0, 1);
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  while (d <= yesterday) {
-    dates.push(dateStr(d));
+  // Split year into 31-day chunks
+  const chunks = [];
+  const d = new Date(jan1);
+  while (d < today) {
+    const start = yyyymmdd(d);
+    d.setDate(d.getDate() + 30);
+    if (d > today) d.setTime(today.getTime());
+    const end = yyyymmdd(d);
+    chunks.push({ start, end });
     d.setDate(d.getDate() + 1);
   }
 
-  // Fetch all days, cached ones return instantly
-  const results = [];
-  for (const dt of dates) {
-    const r = await fetchDay(dt);
-    if (r) results.push(r);
-    // Small delay for uncached requests to avoid rate limiting
-    if (!localStorage.getItem(`wx_${dt}`)) {
-      await new Promise(ok => setTimeout(ok, 300));
-    }
-  }
+  // Fetch all chunks in parallel
+  const results = await Promise.all(chunks.map(async ({ start, end }) => {
+    const url = `https://api.weather.com/v2/pws/history/daily?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m&startDate=${start}&endDate=${end}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.observations || [];
+    } catch (e) { return []; }
+  }));
 
-  return results;
+  // Flatten and map
+  return results.flat().map(o => ({
+    date: o.obsTimeLocal.slice(0, 10).replace(/-/g, ''),
+    tempHigh: o.metric.tempHigh,
+    tempLow: o.metric.tempLow,
+    precipTotal: o.metric.precipTotal
+  }));
 }
 
 function renderHistory(days) {
   if (days.length === 0) return '<div class="status">Няма исторически данни</div>';
 
   const now = new Date();
-  const today = dateStr(now);
-
-  // Last 7 days
   const last7 = days.slice(-7);
   const last30 = days.slice(-30);
 
@@ -247,12 +175,20 @@ function renderHistory(days) {
   const precip30 = last30.reduce((s, d) => s + (d.precipTotal || 0), 0);
   const precipYear = days.reduce((s, d) => s + (d.precipTotal || 0), 0);
 
-  const tempMin7 = Math.min(...last7.map(d => d.tempLow));
-  const tempMax7 = Math.max(...last7.map(d => d.tempHigh));
+  let tableRows = '';
+  for (const day of [...last7].reverse()) {
+    tableRows += `
+      <tr>
+        <td>${fmtDate(day.date)}</td>
+        <td>${day.tempLow.toFixed(1)}&deg;</td>
+        <td>${day.tempHigh.toFixed(1)}&deg;</td>
+        <td>${day.precipTotal.toFixed(1)} mm</td>
+      </tr>`;
+  }
 
-  let html = `
-    <div class="section-title">Валежи</div>
-    <div class="history-grid">
+  return `
+    <div class="section">Валежи</div>
+    <div class="grid-3">
       <div class="card">
         <div class="label">7 дни</div>
         <div class="val">${precip7.toFixed(1)}</div>
@@ -269,35 +205,17 @@ function renderHistory(days) {
         <div class="sub">mm</div>
       </div>
     </div>
-
-    <div class="section-title">Последни 7 дни</div>
-    <table class="history-table">
-      <tr>
-        <th>Дата</th>
-        <th>Мин</th>
-        <th>Макс</th>
-        <th>Валеж</th>
-      </tr>
-  `;
-
-  for (const day of last7.reverse()) {
-    html += `
-      <tr>
-        <td>${formatDate(day.date)}</td>
-        <td>${day.tempLow.toFixed(1)}&deg;</td>
-        <td>${day.tempHigh.toFixed(1)}&deg;</td>
-        <td>${day.precipTotal.toFixed(1)} mm</td>
-      </tr>
-    `;
-  }
-
-  html += '</table>';
-  return html;
+    <div class="section">Последни 7 дни</div>
+    <table>
+      <tr><th>Дата</th><th>Мин</th><th>Макс</th><th>Валеж</th></tr>
+      ${tableRows}
+    </table>`;
 }
 
 async function fetchWeather() {
   try {
-    const res = await fetch(CURRENT_URL);
+    const url = `https://api.weather.com/v2/pws/observations/current?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const obs = data.observations[0];
@@ -305,9 +223,8 @@ async function fetchWeather() {
     const time = new Date(obs.obsTimeUtc);
     const timeStr = time.toLocaleString('bg-BG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 
-    const historyHtml = document.getElementById('history')
-      ? document.getElementById('history').innerHTML
-      : '<div class="status">Зареждане на история...</div>';
+    const historyEl = document.getElementById('history');
+    const historyHtml = historyEl ? historyEl.innerHTML : '';
 
     document.getElementById('app').innerHTML = `
       <div class="header">
@@ -319,7 +236,7 @@ async function fetchWeather() {
         <div class="value">${m.temp.toFixed(1)}<span class="unit">&deg;C</span></div>
         <div class="feels">Усеща се ${m.heatIndex !== m.temp ? m.heatIndex.toFixed(1) : m.windChill.toFixed(1)}&deg;C</div>
       </div>
-      <div class="section-title">Текущи данни</div>
+      <div class="section">Текущи данни</div>
       <div class="grid">
         <div class="card">
           <div class="label">Влажност</div>
@@ -370,7 +287,7 @@ async function fetchWeather() {
 }
 
 async function loadHistory() {
-  const days = await fetchHistory();
+  const days = await fetchYearHistory();
   const el = document.getElementById('history');
   if (el) el.innerHTML = renderHistory(days);
 }
@@ -378,8 +295,6 @@ async function loadHistory() {
 fetchWeather();
 loadHistory();
 setInterval(fetchWeather, 60000);
-// Reload history every 30 minutes
-setInterval(loadHistory, 30 * 60000);
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
