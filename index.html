@@ -69,9 +69,20 @@
     opacity: 0.5;
     margin-top: 4px;
   }
+  .header .coords {
+    font-size: 0.75em;
+    opacity: 0.4;
+    margin-top: 3px;
+  }
+  .station-info {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 0.75em;
+    opacity: 0.35;
+  }
   .status {
     text-align: center;
-    margin-top: 20px;
+    margin-top: 8px;
     font-size: 0.75em;
     opacity: 0.4;
   }
@@ -118,6 +129,7 @@ async function fetchWeather() {
       <div class="header">
         <h1>Попович</h1>
         <div class="time">${timeStr}</div>
+        <div class="coords">${obs.lat.toFixed(4)}°N, ${obs.lon.toFixed(4)}°E | ${m.elev.toFixed(1)} м н.в.</div>
       </div>
       <div class="temp-main">
         <div class="value">${m.temp.toFixed(1)}<span class="unit">&deg;C</span></div>
@@ -125,14 +137,29 @@ async function fetchWeather() {
       </div>
       <div class="grid">
         <div class="card">
+          <div class="label">Топлинен индекс</div>
+          <div class="val">${m.heatIndex.toFixed(1)}&deg;C</div>
+        </div>
+        <div class="card">
+          <div class="label">Охлаждане от вятър</div>
+          <div class="val">${m.windChill.toFixed(1)}&deg;C</div>
+        </div>
+        <div class="card">
           <div class="label">Влажност</div>
           <div class="val">${obs.humidity.toFixed(0)}%</div>
-          <div class="sub">Роса ${m.dewpt.toFixed(1)}&deg;C</div>
+        </div>
+        <div class="card">
+          <div class="label">Точка на оросяване</div>
+          <div class="val">${m.dewpt.toFixed(1)}&deg;C</div>
         </div>
         <div class="card">
           <div class="label">Вятър</div>
           <div class="val">${m.windSpeed.toFixed(1)} <small>km/h</small></div>
-          <div class="sub">${windDirection(obs.winddir)} | Порив ${m.windGust.toFixed(1)}</div>
+          <div class="sub">${windDirection(obs.winddir)} (${obs.winddir}&deg;)</div>
+        </div>
+        <div class="card">
+          <div class="label">Порив</div>
+          <div class="val">${m.windGust.toFixed(1)} <small>km/h</small></div>
         </div>
         <div class="card">
           <div class="label">Налягане</div>
@@ -140,19 +167,29 @@ async function fetchWeather() {
           <div class="sub">hPa</div>
         </div>
         <div class="card">
-          <div class="label">Валеж</div>
+          <div class="label">Валеж общо</div>
           <div class="val">${m.precipTotal.toFixed(1)} <small>mm</small></div>
-          <div class="sub">Интензивност ${m.precipRate.toFixed(1)}</div>
+        </div>
+        <div class="card">
+          <div class="label">Интензивност валеж</div>
+          <div class="val">${m.precipRate.toFixed(1)} <small>mm/h</small></div>
         </div>
         <div class="card">
           <div class="label">UV индекс</div>
-          <div class="val">${obs.uv.toFixed(0)}</div>
+          <div class="val">${obs.uv.toFixed(1)}</div>
         </div>
         <div class="card">
-          <div class="label">Слънце</div>
-          <div class="val">${obs.solarRadiation !== null ? obs.solarRadiation.toFixed(0) : '—'}</div>
+          <div class="label">Слънчева радиация</div>
+          <div class="val">${obs.solarRadiation !== null ? obs.solarRadiation.toFixed(1) : '—'}</div>
           <div class="sub">W/m&sup2;</div>
         </div>
+        <div class="card">
+          <div class="label">Надморска височина</div>
+          <div class="val">${m.elev.toFixed(1)} <small>м</small></div>
+        </div>
+      </div>
+      <div class="station-info">
+        Станция: ${obs.stationID} | ${obs.neighborhood}, ${obs.country}
       </div>
       <div class="status">Обновяване на всеки 60 сек</div>
     `;
