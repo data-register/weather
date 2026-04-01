@@ -124,9 +124,13 @@
 
 <button class="theme-toggle" onclick="toggleTheme()" aria-label="Смяна на тема">&#9789;</button>
 
-<div id="app">
+<div id="current">
   <div class="loading">Зареждане...</div>
 </div>
+<div id="history">
+  <div class="status">Зареждане на история...</div>
+</div>
+<div id="footer"></div>
 
 <script>
 const API_KEY = 'ad4163ac839d47328163ac839d1732f8';
@@ -275,10 +279,7 @@ async function fetchWeather() {
     const time = new Date(obs.obsTimeUtc);
     const timeStr = fmtDateTime(time);
 
-    const historyEl = document.getElementById('history');
-    const historyHtml = historyEl ? historyEl.innerHTML : '';
-
-    document.getElementById('app').innerHTML = `
+    document.getElementById('current').innerHTML = `
       <div class="header">
         <h1>Мандра Харизанов<br><small style="font-size:0.7em;opacity:0.6">с. Попович</small></h1>
         <div class="time">${timeStr}</div>
@@ -326,14 +327,13 @@ async function fetchWeather() {
           <div class="sub">W/m&sup2;</div>
         </div>
       </div>
-      <div id="history">${historyHtml}</div>
-      <div class="station-info">
-        Мандра Харизанов, с. Попович, БГ
-      </div>
+    `;
+    document.getElementById('footer').innerHTML = `
+      <div class="station-info">Мандра Харизанов, с. Попович, БГ</div>
       <div class="status">Обновяване на всеки 60 сек</div>
     `;
   } catch (e) {
-    document.getElementById('app').innerHTML = `<div class="error">Грешка: ${e.message}</div>`;
+    document.getElementById('current').innerHTML = `<div class="error">Грешка: ${e.message}</div>`;
   }
 }
 
