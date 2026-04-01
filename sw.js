@@ -1,4 +1,4 @@
-const CACHE_NAME = 'meteo-v3';
+const CACHE_NAME = 'meteo-v4';
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -20,13 +20,19 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // API requests - always go to network
+  // API requests - always network
   if (url.hostname === 'api.weather.com') {
     return;
   }
 
-  // App files - cache first, fallback to network
+  // Network first, fallback to cache (so updates are always picked up)
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    fetch(e.request)
+      .then(res => {
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
