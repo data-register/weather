@@ -14,9 +14,9 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     min-height: 100vh;
-    padding: 20px;
     transition: background 0.3s, color 0.3s;
     overscroll-behavior-y: contain;
+    overflow-x: hidden;
   }
   body.dark {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -27,7 +27,7 @@
     color: #1a1a2e;
   }
   .theme-toggle {
-    position: absolute;
+    position: fixed;
     top: 16px;
     right: 16px;
     background: rgba(128,128,128,0.3);
@@ -41,12 +41,42 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 10;
   }
+  .slides {
+    display: flex;
+    transition: transform 0.3s ease;
+    width: 200vw;
+  }
+  .slide {
+    width: 100vw;
+    min-height: 100vh;
+    padding: 20px;
+    flex-shrink: 0;
+  }
+  .dots {
+    position: fixed;
+    bottom: 16px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    z-index: 10;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(128,128,128,0.4);
+    transition: background 0.3s;
+  }
+  .dot.active { background: rgba(128,128,128,0.9); }
   .header { text-align: center; padding: 20px 0; }
   .header h1 { font-size: 1.4em; font-weight: 300; opacity: 0.9; }
   .header .time { font-size: 0.85em; opacity: 0.6; margin-top: 5px; }
-  .header .ago { font-size: 0.75em; opacity: 0.4; margin-top: 3px; }
-  .header .ago.stale { color: #ff6b6b; opacity: 1; }
+  .header .ago { font-size: 0.75em; margin-top: 3px; }
+  .header .ago.stale { color: #ff6b6b; }
   .temp-main { text-align: center; padding: 30px 0; }
   .temp-main .value { font-size: 5em; font-weight: 200; line-height: 1; }
   .temp-main .unit { font-size: 0.4em; opacity: 0.6; vertical-align: super; }
@@ -136,6 +166,11 @@
     transition: opacity 0.2s;
     height: 0;
     overflow: visible;
+    position: fixed;
+    top: 5px;
+    left: 0;
+    right: 0;
+    z-index: 10;
   }
   .pull-indicator.visible { opacity: 0.5; }
 </style>
@@ -145,17 +180,86 @@
 <button class="theme-toggle" onclick="toggleTheme()" aria-label="Смяна на тема">&#9789;</button>
 <div class="pull-indicator" id="pullIndicator">&#8595; Дръпни за обновяване</div>
 
-<div id="current">
-  <div class="loading">Зареждане...</div>
+<div class="slides" id="slides">
+  <div class="slide" id="slide0">
+    <div id="current0"><div class="loading">Зареждане...</div></div>
+    <div id="history0"><div class="status">Зареждане на история...</div></div>
+  </div>
+  <div class="slide" id="slide1">
+    <div id="current1"><div class="loading">Зареждане...</div></div>
+    <div id="history1"><div class="status">Зареждане на история...</div></div>
+  </div>
 </div>
-<div id="history">
-  <div class="status">Зареждане на история...</div>
+
+<div class="dots">
+  <div class="dot active" id="dot0"></div>
+  <div class="dot" id="dot1"></div>
 </div>
-<div id="footer"></div>
 
 <script>
 const API_KEY = 'ad4163ac839d47328163ac839d1732f8';
-const STATION_ID = 'IPOPOV26';
+
+const STATIONS = [
+  { id: 'IPOPOV26', name: 'Мандра Харизанов', subtitle: 'с. Попович', info: 'Мандра Харизанов, с. Попович, БГ' },
+  { id: 'IOBZOR2', name: 'Обзор', subtitle: '', info: 'Обзор, БГ' }
+];
+
+// Swipe navigation
+let currentSlide = 0;
+let swipeStartX = 0;
+let swipeStartY = 0;
+let swiping = false;
+
+const slidesEl = document.getElementById('slides');
+
+document.addEventListener('touchstart', e => {
+  swipeStartX = e.touches[0].clientX;
+  swipeStartY = e.touches[0].clientY;
+  swiping = false;
+});
+
+document.addEventListener('touchmove', e => {
+  const dx = e.touches[0].clientX - swipeStartX;
+  const dy = e.touches[0].clientY - swipeStartY;
+  // Only swipe horizontally if movement is more horizontal than vertical
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 20) {
+    swiping = true;
+  }
+  // Pull to refresh (only on first touch and scrolled to top)
+  if (!swiping && window.scrollY === 0 && dy > 60) {
+    document.getElementById('pullIndicator').classList.add('visible');
+  }
+});
+
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - swipeStartX;
+
+  // Pull to refresh
+  const indicator = document.getElementById('pullIndicator');
+  if (indicator.classList.contains('visible')) {
+    indicator.classList.remove('visible');
+    refreshAll();
+    swiping = false;
+    return;
+  }
+
+  if (swiping) {
+    if (dx < -60 && currentSlide < STATIONS.length - 1) {
+      currentSlide++;
+    } else if (dx > 60 && currentSlide > 0) {
+      currentSlide--;
+    }
+    updateSlide();
+  }
+  swiping = false;
+});
+
+function updateSlide() {
+  slidesEl.style.transform = `translateX(-${currentSlide * 100}vw)`;
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.classList.toggle('active', i === currentSlide);
+  });
+}
 
 // Theme
 function toggleTheme() {
@@ -170,31 +274,17 @@ function toggleTheme() {
     btn.innerHTML = '&#9789;';
     localStorage.setItem('theme', 'dark');
   }
+  // Redraw charts
+  STATIONS.forEach((st, i) => {
+    const canvas = document.getElementById(`tempChart${i}`);
+    if (canvas && canvas._days) drawChart(`tempChart${i}`, canvas._days);
+  });
 }
 const savedTheme = localStorage.getItem('theme');
 if (savedTheme === 'light') {
   document.body.classList.replace('dark', 'light');
   document.querySelector('.theme-toggle').innerHTML = '&#9728;';
 }
-
-// Pull to refresh
-let pullStart = 0;
-document.addEventListener('touchstart', e => {
-  if (window.scrollY === 0) pullStart = e.touches[0].clientY;
-});
-document.addEventListener('touchmove', e => {
-  if (pullStart && e.touches[0].clientY - pullStart > 60) {
-    document.getElementById('pullIndicator').classList.add('visible');
-  }
-});
-document.addEventListener('touchend', e => {
-  const indicator = document.getElementById('pullIndicator');
-  if (indicator.classList.contains('visible')) {
-    indicator.classList.remove('visible');
-    refreshAll();
-  }
-  pullStart = 0;
-});
 
 // Helpers
 function windDirection(deg) {
@@ -209,9 +299,7 @@ function windDirection(deg) {
 function kmhToMs(kmh) { return (kmh / 3.6).toFixed(1); }
 function pad(n) { return String(n).padStart(2, '0'); }
 function yyyymmdd(d) { return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); }
-function fmtDate(s) {
-  return s.slice(6,8) + '.' + s.slice(4,6);
-}
+function fmtDate(s) { return s.slice(6,8) + '.' + s.slice(4,6); }
 function fmtDateTime(d) {
   return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear() + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
@@ -229,23 +317,26 @@ function pressureArrow(trend) {
   return ' &#8594;';
 }
 
-// Today's min/max and pressure trend from daily summary
-let todaySummary = null;
-async function fetchTodaySummary() {
+// Per-station data
+const stationData = STATIONS.map(() => ({ summary: null }));
+
+async function fetchTodaySummary(idx) {
+  const st = STATIONS[idx];
   try {
-    const url = `https://api.weather.com/v2/pws/dailysummary/7day?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
+    const url = `https://api.weather.com/v2/pws/dailysummary/7day?apiKey=${API_KEY}&stationId=${st.id}&numericPrecision=decimal&format=json&units=m`;
     const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
     const today = new Date().toISOString().slice(0, 10);
-    todaySummary = data.summaries.find(s => s.obsTimeLocal.startsWith(today)) || data.summaries[data.summaries.length - 1];
+    stationData[idx].summary = data.summaries.find(s => s.obsTimeLocal.startsWith(today)) || data.summaries[data.summaries.length - 1];
   } catch (e) {}
 }
 
-// Current weather
-async function fetchWeather() {
+async function fetchWeather(idx) {
+  const st = STATIONS[idx];
+  const summary = stationData[idx].summary;
   try {
-    const url = `https://api.weather.com/v2/pws/observations/current?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m`;
+    const url = `https://api.weather.com/v2/pws/observations/current?apiKey=${API_KEY}&stationId=${st.id}&numericPrecision=decimal&format=json&units=m`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -253,24 +344,19 @@ async function fetchWeather() {
     const m = obs.metric;
     const time = new Date(obs.obsTimeUtc);
     const timeStr = fmtDateTime(time);
-    const ago = timeAgo(time);
     const stale = (Date.now() - time.getTime()) > 30 * 60000;
+    const pTrend = summary ? pressureArrow(summary.metric.pressureTrend) : '';
 
-    const minmax = todaySummary
-      ? `${todaySummary.metric.tempLow.toFixed(1)}° / ${todaySummary.metric.tempHigh.toFixed(1)}°`
-      : '';
-    const pTrend = todaySummary ? pressureArrow(todaySummary.metric.pressureTrend) : '';
-
-    document.getElementById('current').innerHTML = `
+    document.getElementById(`current${idx}`).innerHTML = `
       <div class="header">
-        <h1>Мандра Харизанов<br><small style="font-size:0.7em;opacity:0.6">с. Попович</small></h1>
+        <h1>${st.name}${st.subtitle ? `<br><small style="font-size:0.7em;opacity:0.6">${st.subtitle}</small>` : ''}</h1>
         <div class="time">${timeStr}</div>
-        ${stale ? `<div class="ago stale">&#9888; Няма данни от ${ago}</div>` : ''}
+        ${stale ? `<div class="ago stale">&#9888; Няма данни от ${timeAgo(time)}</div>` : ''}
       </div>
       <div class="temp-main">
         <div class="value">${m.temp.toFixed(1)}<span class="unit">&deg;C</span></div>
         <div class="feels">Усеща се ${m.heatIndex !== m.temp ? m.heatIndex.toFixed(1) : m.windChill.toFixed(1)}&deg;C</div>
-        ${minmax ? `<div class="minmax">&#9661; ${todaySummary.metric.tempLow.toFixed(1)}&deg; &nbsp; &#9651; ${todaySummary.metric.tempHigh.toFixed(1)}&deg;</div>` : ''}
+        ${summary ? `<div class="minmax">&#9661; ${summary.metric.tempLow.toFixed(1)}&deg; &nbsp; &#9651; ${summary.metric.tempHigh.toFixed(1)}&deg;</div>` : ''}
       </div>
       <div class="section">Текущи данни</div>
       <div class="grid">
@@ -311,18 +397,14 @@ async function fetchWeather() {
           <div class="sub">W/m&sup2;</div>
         </div>
       </div>
-    `;
-    document.getElementById('footer').innerHTML = `
-      <div class="station-info">Мандра Харизанов, с. Попович, БГ</div>
-      <div class="status">Обновяване на всеки 60 сек</div>
+      <div class="station-info">${st.info}</div>
     `;
   } catch (e) {
-    document.getElementById('current').innerHTML = `<div class="error">Грешка: ${e.message}</div>`;
+    document.getElementById(`current${idx}`).innerHTML = `<div class="error">Грешка: ${e.message}</div>`;
   }
 }
 
-// History
-async function fetchYearHistory() {
+async function fetchYearHistory(stationId) {
   const now = new Date();
   const jan1 = new Date(now.getFullYear(), 0, 1);
   const today = now;
@@ -339,7 +421,7 @@ async function fetchYearHistory() {
   }
 
   const results = await Promise.all(chunks.map(async ({ start, end }) => {
-    const url = `https://api.weather.com/v2/pws/history/daily?apiKey=${API_KEY}&stationId=${STATION_ID}&numericPrecision=decimal&format=json&units=m&startDate=${start}&endDate=${end}`;
+    const url = `https://api.weather.com/v2/pws/history/daily?apiKey=${API_KEY}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m&startDate=${start}&endDate=${end}`;
     try {
       const res = await fetch(url);
       if (!res.ok) return [];
@@ -359,6 +441,7 @@ async function fetchYearHistory() {
 function drawChart(canvasId, days) {
   const canvas = document.getElementById(canvasId);
   if (!canvas || days.length < 2) return;
+  canvas._days = days;
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -366,8 +449,8 @@ function drawChart(canvasId, days) {
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
   const w = rect.width, h = rect.height;
-  const pad_l = 35, pad_r = 10, pad_t = 10, pad_b = 25;
-  const cw = w - pad_l - pad_r, ch = h - pad_t - pad_b;
+  const pl = 35, pr = 10, pt = 10, pb = 25;
+  const cw = w - pl - pr, ch = h - pt - pb;
 
   const allTemps = days.flatMap(d => [d.tempLow, d.tempHigh]);
   const tMin = Math.floor(Math.min(...allTemps)) - 1;
@@ -378,55 +461,46 @@ function drawChart(canvasId, days) {
   const textColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
   const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
 
-  // Grid lines
-  ctx.strokeStyle = gridColor;
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = gridColor; ctx.lineWidth = 1;
   for (let t = Math.ceil(tMin); t <= Math.floor(tMax); t += Math.ceil(tRange / 4)) {
-    const y = pad_t + ch - ((t - tMin) / tRange) * ch;
-    ctx.beginPath(); ctx.moveTo(pad_l, y); ctx.lineTo(w - pad_r, y); ctx.stroke();
+    const y = pt + ch - ((t - tMin) / tRange) * ch;
+    ctx.beginPath(); ctx.moveTo(pl, y); ctx.lineTo(w - pr, y); ctx.stroke();
     ctx.fillStyle = textColor; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText(t + '°', pad_l - 5, y + 4);
+    ctx.fillText(t + '°', pl - 5, y + 4);
   }
 
-  // Date labels
   ctx.fillStyle = textColor; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
   days.forEach((d, i) => {
-    const x = pad_l + (i / (days.length - 1)) * cw;
+    const x = pl + (i / (days.length - 1)) * cw;
     ctx.fillText(fmtDate(d.date), x, h - 5);
   });
 
-  // High line
-  ctx.strokeStyle = '#ff6b6b';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
+  ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2; ctx.beginPath();
   days.forEach((d, i) => {
-    const x = pad_l + (i / (days.length - 1)) * cw;
-    const y = pad_t + ch - ((d.tempHigh - tMin) / tRange) * ch;
+    const x = pl + (i / (days.length - 1)) * cw;
+    const y = pt + ch - ((d.tempHigh - tMin) / tRange) * ch;
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
   ctx.stroke();
 
-  // Low line
-  ctx.strokeStyle = '#4dabf7';
-  ctx.beginPath();
+  ctx.strokeStyle = '#4dabf7'; ctx.beginPath();
   days.forEach((d, i) => {
-    const x = pad_l + (i / (days.length - 1)) * cw;
-    const y = pad_t + ch - ((d.tempLow - tMin) / tRange) * ch;
+    const x = pl + (i / (days.length - 1)) * cw;
+    const y = pt + ch - ((d.tempLow - tMin) / tRange) * ch;
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
   ctx.stroke();
 
-  // Dots
   days.forEach((d, i) => {
-    const x = pad_l + (i / (days.length - 1)) * cw;
+    const x = pl + (i / (days.length - 1)) * cw;
     ctx.fillStyle = '#ff6b6b';
-    ctx.beginPath(); ctx.arc(x, pad_t + ch - ((d.tempHigh - tMin) / tRange) * ch, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, pt + ch - ((d.tempHigh - tMin) / tRange) * ch, 3, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#4dabf7';
-    ctx.beginPath(); ctx.arc(x, pad_t + ch - ((d.tempLow - tMin) / tRange) * ch, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, pt + ch - ((d.tempLow - tMin) / tRange) * ch, 3, 0, Math.PI * 2); ctx.fill();
   });
 }
 
-function renderHistory(days) {
+function renderHistory(days, idx) {
   if (days.length === 0) return '<div class="status">Няма исторически данни</div>';
 
   const now = new Date();
@@ -474,36 +548,38 @@ function renderHistory(days) {
     </table>
     <div class="section">Температура — 7 дни</div>
     <div class="chart-container">
-      <canvas id="tempChart" style="width:100%;height:100%"></canvas>
+      <canvas id="tempChart${idx}" style="width:100%;height:100%"></canvas>
     </div>
     <div style="max-width:500px;margin:6px auto 0;display:flex;gap:16px;justify-content:center;font-size:0.75em;opacity:0.5">
       <span><span style="color:#ff6b6b">&#9644;</span> Макс</span>
       <span><span style="color:#4dabf7">&#9644;</span> Мин</span>
-    </div>`;
+    </div>
+    <div style="height:40px"></div>`;
 }
 
-async function loadHistory() {
-  const days = await fetchYearHistory();
-  const el = document.getElementById('history');
+async function loadStation(idx) {
+  await fetchTodaySummary(idx);
+  fetchWeather(idx);
+  const days = await fetchYearHistory(STATIONS[idx].id);
+  const el = document.getElementById(`history${idx}`);
   if (el) {
-    el.innerHTML = renderHistory(days);
+    el.innerHTML = renderHistory(days, idx);
     const last7 = days.slice(-7);
-    if (last7.length >= 2) drawChart('tempChart', last7);
+    if (last7.length >= 2) drawChart(`tempChart${idx}`, last7);
   }
 }
 
 async function refreshAll() {
-  await fetchTodaySummary();
-  fetchWeather();
-  loadHistory();
+  STATIONS.forEach((_, i) => loadStation(i));
 }
 
-// Initial load
-fetchTodaySummary().then(() => fetchWeather());
-loadHistory();
-setInterval(async () => {
-  await fetchTodaySummary();
-  fetchWeather();
+// Initial load — both stations in parallel
+refreshAll();
+setInterval(() => {
+  STATIONS.forEach(async (_, i) => {
+    await fetchTodaySummary(i);
+    fetchWeather(i);
+  });
 }, 60000);
 
 if ('serviceWorker' in navigator) {
